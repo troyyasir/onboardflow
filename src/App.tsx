@@ -1,17 +1,18 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { CheckCircle2, AlertCircle } from 'lucide-react';
+import { CheckCircle2, AlertCircle, Loader2, RefreshCcw, Phone, Bot } from 'lucide-react'; // Added Phone and Bot icons
 import CountrySelection from '@/components/CountrySelection';
 import BusinessSearch from '@/components/BusinessSearch';
 import NumberSelection from '@/components/NumberSelection';
 import BusinessType from '@/components/BusinessType';
+import ThemeToggle from '@/components/ThemeToggle'; // Import ThemeToggle
 
 export type FormData = {
   country: string;
-  selectedNumber?: string;
+  selectedNumber?: string; // Keep this? Or replace with generatedNumber?
   businessType: string;
   businessSearch: {
     name: string;
@@ -22,18 +23,21 @@ export type FormData = {
 
 const TOTAL_STEPS = 4;
 
+type SubmissionPhase = 'idle' | 'submitting' | 'success' | 'error';
+
 function App() {
+  const [hasStarted, setHasStarted] = useState(false);
   const [currentStep, setCurrentStep] = useState(1);
-  const [showGifOverlay, setShowGifOverlay] = useState(false);
+  const [submissionPhase, setSubmissionPhase] = useState<SubmissionPhase>('idle');
   const [formData, setFormData] = useState<FormData>({
     country: '',
-    selectedNumber: '',
+    selectedNumber: '', // Maybe remove if number is always generated post-submit
     businessType: '',
     businessSearch: null,
   });
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [submitStatus, setSubmitStatus] = useState<'success' | 'error' | null>(null);
   const [errorMessage, setErrorMessage] = useState<string>('');
+  const [generatedNumber, setGeneratedNumber] = useState<string | null>(null); // New state for generated number
+  const [agentName, setAgentName] = useState<string | null>(null); // New state for agent name
 
   const updateFormData = (data: Partial<FormData>) => {
     setFormData(prev => ({ ...prev, ...data }));
@@ -60,7 +64,7 @@ function App() {
       case 1:
         return !!formData.country;
       case 2:
-        return !!formData.selectedNumber;
+        return !!formData.selectedNumber; // Still relevant for selection step
       case 3:
         return !!formData.businessType;
       case 4:
@@ -71,38 +75,70 @@ function App() {
   };
 
   const handleSubmit = async () => {
-    setShowGifOverlay(true);
-    setIsSubmitting(true);
+    setSubmissionPhase('submitting');
     setErrorMessage('');
-    
+    setGeneratedNumber(null); // Clear previous results
+    setAgentName(null); // Clear previous results
+
     try {
+      // Simulate API call delay
+      await new Promise(resolve => setTimeout(resolve, 2000)); 
+      
       const response = await fetch('https://httpbin.org/post', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData),
       });
-      
+
       if (!response.ok) {
         const errorData = await response.text();
         throw new Error(`Submission failed: ${response.status} ${response.statusText}${errorData ? ` - ${errorData}` : ''}`);
       }
       
-      setSubmitStatus('success');
+      // --- Simulate receiving data on success --- 
+      const fakeGeneratedNumber = `+${Math.floor(1000000000 + Math.random() * 9000000000)}`; // Generate random 10-digit number
+      const fakeAgentName = 'Ava'; // Example agent name
+      
+      setGeneratedNumber(fakeGeneratedNumber);
+      setAgentName(fakeAgentName);
+      // --- End Simulation ---
+      
+      // Simulate success state transition delay
+      await new Promise(resolve => setTimeout(resolve, 1500)); 
+      setSubmissionPhase('success');
+
     } catch (error) {
       console.error('Form submission error:', error);
-      setSubmitStatus('error');
+      setSubmissionPhase('error');
       setErrorMessage(error instanceof Error ? error.message : 'An unexpected error occurred during form submission');
-    } finally {
-      setIsSubmitting(false);
-      if (submitStatus === 'error') {
-        setShowGifOverlay(false);
-      }
     }
+  };
+  
+  const handleRetry = () => {
+    setSubmissionPhase('idle'); 
+    setErrorMessage('');
+    setGeneratedNumber(null);
+    setAgentName(null);
+  };
+  
+  const handleStartOver = () => {
+    setHasStarted(false);
+    setCurrentStep(1);
+    setSubmissionPhase('idle');
+    setFormData({
+      country: '',
+      selectedNumber: '',
+      businessType: '',
+      businessSearch: null,
+    });
+    setErrorMessage('');
+    setGeneratedNumber(null); // Reset generated data
+    setAgentName(null); // Reset generated data
   };
 
   const handleBusinessSearch = (businessInfo: { name: string; address?: string; website?: string }) => {
     updateFormData({ businessSearch: businessInfo });
-    handleNext();
+    // Don't automatically move to next
   };
 
   const renderStep = () => {
@@ -114,90 +150,155 @@ function App() {
       case 3:
         return <BusinessType value={formData.businessType} onChange={(businessType) => updateFormData({ businessType })} />;
       case 4:
-        return <BusinessSearch onSelect={handleBusinessSearch} />;
+        return <BusinessSearch 
+                 initialData={formData.businessSearch}
+                 onSelect={handleBusinessSearch} 
+               />;
       default:
         return null;
     }
   };
 
-  return (
-    <div className="min-h-screen bg-background p-4 flex items-center justify-center">
-      <Card className="w-full max-w-xl p-8 glass-card relative overflow-hidden">
-        {showGifOverlay ? (
-          <div className="absolute inset-0 flex items-center justify-center bg-black/20 backdrop-blur-sm z-10">
-            <div className="w-[576px] h-[66px] flex items-center justify-center">
-              <img 
-                src="/ThinkAnswer-ezgif.com-optimize.gif" 
-                alt="Building your number" 
-                className="w-full h-full object-contain"
-              />
-            </div>
-          </div>
-        ) : (
-          <>
-            <div className="space-y-2">
-              <Progress 
-                value={(currentStep / TOTAL_STEPS) * 100} 
-                className="h-1 bg-secondary"
-              />
-              <p className="text-sm text-muted-foreground text-right">
-                Step {currentStep} of {TOTAL_STEPS}
-              </p>
-            </div>
+  const handleGetStarted = () => {
+    setHasStarted(true);
+  };
 
-            <div className="min-h-[400px] mt-8">
-              {renderStep()}
-            </div>
-
-            {submitStatus && (
-              <Alert variant={submitStatus === 'success' ? 'default' : 'destructive'}>
-                <AlertDescription className="flex items-center gap-2">
-                  {submitStatus === 'success' ? (
-                    <>
-                      <CheckCircle2 className="h-4 w-4" />
-                      Form submitted successfully!
-                    </>
-                  ) : (
-                    <>
-                      <AlertCircle className="h-4 w-4" />
-                      {errorMessage || 'There was an error submitting the form. Please try again.'}
-                    </>
-                  )}
-                </AlertDescription>
-              </Alert>
-            )}
-
-            <div className="flex justify-between pt-8">
-              <Button
-                variant="ghost"
-                onClick={handleBack}
-                disabled={currentStep === 1}
-                className="button-glow"
-              >
-                Back
-              </Button>
+  const renderSubmissionStatus = () => {
+    return (
+      <Card className="w-full max-w-xl p-8 glass-card text-center flex flex-col items-center justify-center min-h-[500px]">
+        <CardHeader>
+          <CardTitle className="text-2xl font-bold mb-4">
+            {submissionPhase === 'submitting' && 'Building Your Number'}
+            {submissionPhase === 'success' && 'Setup Complete!'}
+            {submissionPhase === 'error' && 'Submission Failed'}
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-6 flex flex-col items-center">
+          {submissionPhase === 'submitting' && (
+            <>
+              <Loader2 className="h-16 w-16 animate-spin text-primary mb-4" />
+              <p className="text-muted-foreground">Please wait while we configure everything...</p>
+            </>
+          )}
+          {submissionPhase === 'success' && (
+            <>
+              <CheckCircle2 className="h-16 w-16 text-green-500 mb-4" />
               
-              {currentStep === TOTAL_STEPS ? (
-                <Button
-                  onClick={handleSubmit}
-                  disabled={!isStepValid() || isSubmitting}
-                  className="button-glow bg-primary hover:bg-primary/90"
-                >
-                  {isSubmitting ? 'Building...' : 'Build Your Number'}
+              {/* Display Generated Number and Agent Name */}
+              <div className="space-y-3 text-left bg-muted p-4 rounded-md w-full max-w-xs">
+                <p className="flex items-center">
+                  <Phone className="h-5 w-5 mr-3 text-primary" />
+                  <span className="font-medium">Your Number:</span>
+                  <span className="ml-2 text-foreground font-semibold">{generatedNumber || 'N/A'}</span>
+                </p>
+                 <p className="flex items-center">
+                  <Bot className="h-5 w-5 mr-3 text-primary" />
+                  <span className="font-medium">AI Agent:</span>
+                   <span className="ml-2 text-foreground font-semibold">{agentName || 'N/A'}</span>
+                </p>
+              </div>
+
+              <p className="text-muted-foreground mt-4">
+                Your business number and AI agent are ready! 
+              </p>
+              <Button onClick={handleStartOver} className="mt-6 button-glow bg-primary hover:bg-primary/90">Start New Setup</Button>
+            </>
+          )}
+          {submissionPhase === 'error' && (
+            <>
+              <AlertCircle className="h-16 w-16 text-red-500 mb-4" />
+              <p className="text-destructive-foreground">
+                {errorMessage || 'An unexpected error occurred.'}
+              </p>
+              <div className="flex gap-4 mt-6">
+                <Button variant="outline" onClick={handleRetry} className="button-glow">
+                   <RefreshCcw className="mr-2 h-4 w-4" /> Try Again
                 </Button>
-              ) : (
-                <Button
-                  onClick={handleNext}
-                  disabled={!isStepValid()}
-                  className="button-glow bg-primary hover:bg-primary/90"
-                >
-                  Next
-                </Button>
-              )}
-            </div>
-          </>
-        )}
+                 <Button onClick={handleStartOver} className="button-glow bg-primary hover:bg-primary/90">Start Over</Button>
+              </div>
+            </>
+          )}
+        </CardContent>
       </Card>
+    );
+  };
+
+  return (
+    <div className="min-h-screen bg-background p-4 flex items-center justify-center relative"> {/* Added relative positioning */}
+      {/* Added ThemeToggle here */}
+      <div className="absolute top-4 right-4">
+        <ThemeToggle />
+      </div>
+
+      {!hasStarted ? (
+        // Get Started Screen
+        <Card className="w-full max-w-xl p-8 glass-card text-center">
+          <CardHeader>
+            <CardTitle className="text-2xl font-bold mb-4">Welcome!</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <p className="text-muted-foreground">
+              Let's get started with setting up your business number.
+            </p>
+            <Button onClick={handleGetStarted} size="lg" className="w-full button-glow bg-primary hover:bg-primary/90">
+              Get Started
+            </Button>
+          </CardContent>
+        </Card>
+      ) : submissionPhase !== 'idle' ? (
+        // Submission Status Screen
+        renderSubmissionStatus()
+      ) : (
+        // Multi-step Form
+        <Card className="w-full max-w-xl p-8 glass-card relative flex flex-col min-h-[600px]">
+          <div className="space-y-2">
+            <Progress
+              value={(currentStep / TOTAL_STEPS) * 100}
+              className="h-1 bg-secondary"
+            />
+            <p className="text-sm text-muted-foreground text-right">
+              Step {currentStep} of {TOTAL_STEPS}
+            </p>
+          </div>
+
+          <div className="flex-grow min-h-[400px] mt-8">
+            {renderStep()}
+          </div>
+          
+          <div className="flex justify-between pt-8 mt-auto border-t border-border/20">
+            <Button
+              variant="ghost"
+              onClick={handleBack}
+              disabled={currentStep === 1 || submissionPhase === 'submitting'}
+              className="button-glow"
+            >
+              Back
+            </Button>
+
+            {currentStep === TOTAL_STEPS ? (
+              <Button
+                onClick={handleSubmit}
+                disabled={!isStepValid() || submissionPhase === 'submitting'}
+                className="button-glow bg-primary hover:bg-primary/90"
+              >
+                {submissionPhase === 'submitting' ? (
+                    <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Building...</> 
+                 ) : (
+                    'Build Your Number'
+                 )}
+              </Button>
+            ) : (
+              <Button
+                onClick={handleNext}
+                disabled={!isStepValid() || submissionPhase === 'submitting'}
+                className="button-glow bg-primary hover:bg-primary/90"
+              >
+                Next
+              </Button>
+            )}
+          </div>
+        </Card>
+      )}
     </div>
   );
 }
